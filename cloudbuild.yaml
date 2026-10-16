@@ -1,0 +1,46 @@
+steps:
+  # Step 1: Build Docker image tagged with BUILD_ID and latest
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/builder-cup-511710/traceops-sre-engine:$BUILD_ID'
+      - '-t'
+      - 'gcr.io/builder-cup-511710/traceops-sre-engine:latest'
+      - '.'
+
+  # Step 2: Push container image to Google Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/builder-cup-511710/traceops-sre-engine:$BUILD_ID'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/builder-cup-511710/traceops-sre-engine:latest'
+
+  # Step 3: Deploy to Google Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'traceops-sre-engine'
+      - '--image=gcr.io/builder-cup-511710/traceops-sre-engine:$BUILD_ID'
+      - '--region=us-central1'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--port=8080'
+      - '--cpu=2'
+      - '--memory=2Gi'
+      - '--min-instances=0'
+      - '--max-instances=3'
+      - '--set-env-vars=GCP_PROJECT=builder-cup-511710,MODEL_NAME=gemini-1.5-pro,REGION=us-central1'
+
+images:
+  - 'gcr.io/builder-cup-511710/traceops-sre-engine:$BUILD_ID'
+  - 'gcr.io/builder-cup-511710/traceops-sre-engine:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

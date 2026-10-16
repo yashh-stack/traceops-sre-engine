@@ -43,8 +43,14 @@ build/
 # Secrets / local artifacts
 *.pem
 *.key
+*.p12
+*.crt
+*.cert
 trace_rag.db
 uploads/
 secrets/
 credentials.json
 service-account*.json
+*service_account*.json
+*key*.json
+*.secret
