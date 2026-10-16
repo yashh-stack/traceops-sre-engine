@@ -167,6 +167,11 @@ async def ingest_telemetry(payload: Union[SpanPayload, Dict[str, Any]], request:
         "trace_id": span_dict["trace_id"],
         "incident_id": incident_id,
         "execution_mode": execution_mode,
+        "confidence_score": confidence,
+        "root_cause": analysis.get("root_cause"),
+        "blast_radius": analysis.get("blast_radius"),
+        "remediation_code": analysis.get("remediation_code"),
+        "mitigation_steps": analysis.get("mitigation_steps", []),
         "analysis": analysis
     }
 
