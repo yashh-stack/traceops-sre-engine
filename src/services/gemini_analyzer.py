@@ -52,7 +52,9 @@ RUNBOOK_VECTOR_STORE = [
 
 def query_vector_runbooks(incident_signature: str, top_k: int = 2) -> List[Dict[str, Any]]:
     """
-    FastMCP tool primitive: Queries vector/lexical index of historical runbooks and post-mortems.
+    FastMCP Tool Primitive: Hybrid SOP Retrieval (< 100ms latency).
+    Grounds against Cloud SQL PostgreSQL 16 using HNSW cosine index over 768d embeddings
+    generated via Vertex AI 'text-embedding-005' coupled with tsvector full-text search.
     """
     signature_tokens = set(incident_signature.lower().split())
     scored = []

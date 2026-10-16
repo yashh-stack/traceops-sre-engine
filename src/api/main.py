@@ -147,6 +147,16 @@ async def ingest_telemetry(payload: Union[SpanPayload, Dict[str, Any]], request:
     # Anomalous span: Hand off to Gemini 1.5 Pro SRE Analyzer
     analysis = gemini_analyzer.analyze_incident(span_dict)
     
+    # Enforce Remediation Sandboxing (Rule 5: Confidence floor >= 0.92 for live execution, else DRY_RUN)
+    confidence = float(analysis.get("confidence_score", 0.0))
+    execution_mode = "LIVE_EXECUTION_PERMITTED" if confidence >= 0.92 else "DRY_RUN"
+    analysis["execution_mode"] = execution_mode
+    if execution_mode == "DRY_RUN":
+        analysis["remediation_sandbox_warning"] = (
+            f"Confidence score {confidence:.2f} is below 0.92 floor. "
+            "Remediation quarantined to DRY_RUN simulation."
+        )
+
     # Persist incident state & telemetry audit to Google Cloud Firestore & Firebase sync
     incident_id = firestore_ledger.record_incident(span_dict["trace_id"], span_dict, analysis)
     
@@ -156,8 +166,39 @@ async def ingest_telemetry(payload: Union[SpanPayload, Dict[str, Any]], request:
         "triage_reason": "Latency p99 threshold breach or unhandled error status detected.",
         "trace_id": span_dict["trace_id"],
         "incident_id": incident_id,
+        "execution_mode": execution_mode,
         "analysis": analysis
     }
+
+@app.post("/api/v1/pubsub/ingest")
+async def ingest_pubsub_event(envelope: Dict[str, Any], request: Request):
+    """
+    Rule 1: Cloud Logging Sink -> Pub/Sub topic 'traceops-incident-events' -> Cloud Run Push Trigger.
+    Unpacks Pub/Sub base64 payload, applies W3C context, and evaluates through Jev Guard.
+    """
+    import base64
+    if not isinstance(envelope, dict) or "message" not in envelope:
+        raise HTTPException(status_code=400, detail="Invalid Pub/Sub envelope schema")
+
+    message = envelope["message"]
+    data_b64 = message.get("data", "")
+    try:
+        raw_json = base64.b64decode(data_b64).decode("utf-8")
+        event_payload = json.loads(raw_json)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to decode base64 Pub/Sub payload: {exc}")
+
+    # Standardize Cloud Logging or span schema
+    span_dict = {
+        "trace_id": event_payload.get("traceId") or message.get("messageId", uuid.uuid4().hex),
+        "service_name": event_payload.get("resource", {}).get("labels", {}).get("service_name") or event_payload.get("service_name", "gcp-workload"),
+        "http_status_code": event_payload.get("httpRequest", {}).get("status") or event_payload.get("http_status_code", 500),
+        "duration_ms": event_payload.get("httpRequest", {}).get("latency", 0.0) or event_payload.get("duration_ms", 1200.0),
+        "error_message": event_payload.get("textPayload") or event_payload.get("jsonPayload", {}).get("message") or event_payload.get("error_message", "Cloud Logging incident trigger"),
+        "attributes": event_payload
+    }
+
+    return await ingest_telemetry(span_dict, request)
 
 @app.post("/api/v1/incidents/analyze", response_model=IncidentAnalysisResponse)
 async def analyze_incident(incident: IncidentAnalysisRequest):
@@ -168,16 +209,23 @@ async def analyze_incident(incident: IncidentAnalysisRequest):
     """
     payload = incident.dict()
     analysis = gemini_analyzer.analyze_incident(payload)
+    
+    # Enforce 0.92 confidence floor
+    confidence = float(analysis.get("confidence_score", 0.0))
+    execution_mode = "LIVE_EXECUTION_PERMITTED" if confidence >= 0.92 else "DRY_RUN"
+    analysis["execution_mode"] = execution_mode
+
     trace_id = payload.get("trace_id") or uuid.uuid4().hex
     firestore_ledger.record_incident(trace_id, payload, analysis)
     
     return IncidentAnalysisResponse(
         root_cause=analysis.get("root_cause", "Undefined system exception"),
-        confidence_score=float(analysis.get("confidence_score", 0.90)),
+        confidence_score=confidence,
         blast_radius=analysis.get("blast_radius", "Localized to service"),
         remediation_code=analysis.get("remediation_code", "# Verify configuration"),
         mitigation_steps=analysis.get("mitigation_steps", ["Restart failing replica"])
     )
+
 
 @app.get("/api/v1/incidents/audit")
 async def get_incident_audit_trail(limit: int = 10):
