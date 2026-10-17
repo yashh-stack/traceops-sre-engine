@@ -49,8 +49,24 @@ build/
 trace_rag.db
 uploads/
 secrets/
-credentials.json
 service-account*.json
 *service_account*.json
 *key*.json
 *.secret
+
+# GCP Service Account Keys & Secrets
+*.json
+!package*.json
+!tsconfig*.json
+!components.json
+!mcp_config.json
+!vercel.json
+!railway.json
+service_account.json
+credentials.json
+.env*
+!.env.example
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
