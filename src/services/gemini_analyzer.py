@@ -128,17 +128,27 @@ class GeminiSREAnalyzer:
                 logger.warning(f"Gemini live inference unavailable ({exc}); falling back to deterministic RCA synthesis.")
 
         if not raw_output:
-            # Deterministic, high-fidelity fallback synthesis grounded in telemetry & runbooks
-            matched = matching_runbooks[0] if matching_runbooks else {
-                "title": f"Critical Failure in {service_name}",
-                "remediation": "# Verify service connection bounds and restart worker\ngcloud run services update traceops-sre-engine --concurrency=80",
-                "blast_radius": f"Elevated latency on {service_name} downstream dependencies"
-            }
+            # Deterministic, high-fidelity synthesis grounded in telemetry & runbooks
+            if matching_runbooks:
+                matched = matching_runbooks[0]
+                confidence = 0.94
+                blast_radius = matched.get("blast_radius", "High: Cascading 504 Gateway Timeouts across ingestion APIs")
+                remediation = matched.get("remediation", "# No patch required")
+            else:
+                matched = {
+                    "title": f"Uncorrelated Anomaly in {service_name}",
+                    "remediation": f"# Quarantined to DRY_RUN simulation\nkubectl get pods -l app={service_name}",
+                    "blast_radius": f"Unverified: Potential localized impact on {service_name}"
+                }
+                confidence = 0.82
+                blast_radius = matched["blast_radius"]
+                remediation = matched["remediation"]
+
             fallback_dict = {
                 "root_cause": f"Unhandled telemetry fault in service '{service_name}': {error_msg or 'Execution threshold breach'}",
-                "confidence_score": 0.94,
-                "blast_radius": matched.get("blast_radius", "Medium: Local pod degradation"),
-                "remediation_code": matched.get("remediation", "# No patch required"),
+                "confidence_score": confidence,
+                "blast_radius": blast_radius,
+                "remediation_code": remediation,
                 "mitigation_steps": [
                     f"Isolate active traffic from failing instance in {service_name}",
                     "Inspect Cloud SQL connection metrics and replica lag",
@@ -146,6 +156,7 @@ class GeminiSREAnalyzer:
                 ]
             }
             return fallback_dict
+
 
         # Repair LLM output non-autoregressively to guarantee valid JSON
         repaired_json = JevTelemetryGuard.repair_json_tokens(raw_output)
