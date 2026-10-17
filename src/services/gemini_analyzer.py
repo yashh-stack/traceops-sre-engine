@@ -72,7 +72,7 @@ class GeminiSREAnalyzer:
     """
 
     def __init__(self, project_id: Optional[str] = None, model_name: str = "gemini-1.5-pro"):
-        self.project_id = project_id or os.getenv("GCP_PROJECT", "builder-cup-511710")
+        self.project_id = project_id or os.getenv("GCP_PROJECT", os.getenv("GCP_PROJECT_ID", "builder-cup-511710"))
         self.model_name = model_name or os.getenv("MODEL_NAME", "gemini-1.5-pro")
         self._client = None
         self._init_client()

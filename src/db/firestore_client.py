@@ -18,7 +18,7 @@ class FirestoreIncidentLedger:
     """
 
     def __init__(self, project_id: Optional[str] = None, collection_name: str = "traceops_incidents"):
-        self.project_id = project_id or os.getenv("GCP_PROJECT", "builder-cup-511710")
+        self.project_id = project_id or os.getenv("GCP_PROJECT", os.getenv("GCP_PROJECT_ID", "builder-cup-511710"))
         self.collection_name = collection_name
         self._db = None
         self._local_audit_log: List[Dict[str, Any]] = []

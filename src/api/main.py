@@ -31,7 +31,7 @@ app = FastAPI(
 # Initialize engines
 jev_guard = JevTelemetryGuard(p99_latency_ms=500.0)
 gemini_analyzer = GeminiSREAnalyzer(
-    project_id=os.getenv("GCP_PROJECT", "builder-cup-511710"),
+    project_id=os.getenv("GCP_PROJECT", os.getenv("GCP_PROJECT_ID", "builder-cup-511710")),
     model_name=os.getenv("MODEL_NAME", "gemini-1.5-pro")
 )
 
@@ -117,7 +117,7 @@ async def healthz():
     return {
         "status": "HEALTHY",
         "version": "1.0.0",
-        "gcp_project": os.getenv("GCP_PROJECT", "builder-cup-511710"),
+        "gcp_project": os.getenv("GCP_PROJECT", os.getenv("GCP_PROJECT_ID", "builder-cup-511710")),
         "region": os.getenv("REGION", "us-central1"),
         "model": os.getenv("MODEL_NAME", "gemini-1.5-pro")
     }
