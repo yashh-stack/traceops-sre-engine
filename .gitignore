@@ -20,6 +20,9 @@ exports/
 *.sqlite
 *.sqlite3
 *.log
+demo_recording/
+*.mp4
+*.mp3
 
 node_modules/
 .next/
